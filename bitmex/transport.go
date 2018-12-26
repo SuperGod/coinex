@@ -106,6 +106,10 @@ func (r *RequestBuffer) SetHeaderParam(name string, values ...string) error {
 	return nil
 }
 
+func (r *RequestBuffer) GetBodyParam() interface{} {
+	return r.payload
+}
+
 func (r *RequestBuffer) SetQueryParam(name string, values ...string) error {
 	if r.query == nil {
 		r.query = make(url.Values)
@@ -197,4 +201,8 @@ func (r *RequestBuffer) GetBody() []byte {
 		return nil
 	}
 	return r.buf.Bytes()
+}
+
+func (r *RequestBuffer) GetFileParam() map[string][]runtime.NamedReadCloser {
+	return r.fileFields
 }
