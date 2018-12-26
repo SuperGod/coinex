@@ -13,7 +13,7 @@ import (
 
 	strfmt "github.com/go-openapi/strfmt"
 
-	models "github.com/SuperGod/coinex/bitmex/models"
+	models "github.com/sumorf/coinex/bitmex/models"
 )
 
 // OrderAmendReader is a Reader for the OrderAmend structure.
@@ -101,7 +101,7 @@ type OrderAmendBadRequest struct {
 }
 
 func (o *OrderAmendBadRequest) Error() string {
-	return fmt.Sprintf("[PUT /order][%d] orderAmendBadRequest  %+v", 400, o.Payload)
+	return fmt.Sprintf("[PUT /order][%d] orderAmendBadRequest  %+v", 400, *o.Payload)
 }
 
 func (o *OrderAmendBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

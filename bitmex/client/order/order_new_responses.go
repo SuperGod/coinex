@@ -13,7 +13,7 @@ import (
 
 	strfmt "github.com/go-openapi/strfmt"
 
-	models "github.com/SuperGod/coinex/bitmex/models"
+	models "github.com/sumorf/coinex/bitmex/models"
 )
 
 // OrderNewReader is a Reader for the OrderNew structure.
@@ -101,7 +101,7 @@ type OrderNewBadRequest struct {
 }
 
 func (o *OrderNewBadRequest) Error() string {
-	return fmt.Sprintf("[POST /order][%d] orderNewBadRequest  %+v", 400, o.Payload)
+	return fmt.Sprintf("[POST /order][%d] orderNewBadRequest  %+v", 400, o.Payload.Error)
 }
 
 func (o *OrderNewBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

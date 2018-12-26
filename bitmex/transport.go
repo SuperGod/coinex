@@ -39,7 +39,7 @@ func (t *Transport) Submit(operation *runtime.ClientOperation) (interface{}, err
 	var fn runtime.ClientAuthInfoWriterFunc
 	fn = func(req runtime.ClientRequest, formats strfmt.Registry) error {
 		expires, sign := t.signature(req, operation, formats)
-		req.SetTimeout(5 * time.Second)
+		req.SetTimeout(30 * time.Second)
 		req.SetHeaderParam("api-key", t.Key)
 		req.SetHeaderParam("api-nonce", expires)
 		req.SetHeaderParam("api-signature", sign)
@@ -197,4 +197,12 @@ func (r *RequestBuffer) GetBody() []byte {
 		return nil
 	}
 	return r.buf.Bytes()
+}
+
+func (r *RequestBuffer) GetBodyParam() interface{} {
+	return nil
+}
+
+func (r *RequestBuffer) GetFileParam() map[string][]runtime.NamedReadCloser {
+	return nil
 }

@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
-	. "github.com/SuperGod/coinex"
+	. "github.com/sumorf/coinex"
 
-	"github.com/SuperGod/coinex/bitmex/models"
-	. "github.com/SuperGod/trademodel"
 	log "github.com/sirupsen/logrus"
+	"github.com/sumorf/coinex/bitmex/models"
+	. "github.com/sumorf/trademodel"
 	"github.com/tidwall/gjson"
 )
 
@@ -175,6 +176,13 @@ func (r *Resp) Decode(buf []byte) (err error) {
 				return
 			}
 			r.data = pos
+		case BitmexWSOrder:
+			var orders []*models.Order
+			err = json.Unmarshal([]byte(raw), &orders)
+			if err != nil {
+				return
+			}
+			r.data = orders
 		case BitmexWSTradeBin1m, BitmexWSTradeBin5m, BitmexWSTradeBin1h, BitmexWSTradeBin1d:
 			var klines []*models.TradeBin
 			err = json.Unmarshal([]byte(raw), &klines)
@@ -211,6 +219,14 @@ func (r *Resp) GetPostions() (positions []*models.Position) {
 		return
 	}
 	positions, _ = r.data.([]*models.Position)
+	return
+}
+
+func (r *Resp) GetOrders() (orders []*models.Order) {
+	if r.Table != BitmexWSOrder || r.data == nil {
+		return
+	}
+	orders, _ = r.data.([]*models.Order)
 	return
 }
 
@@ -321,6 +337,9 @@ func transPosition(v *models.Position) (pos *Position) {
 		Hold:        float64(v.CurrentQty),
 		ProfitRatio: float64(v.UnrealisedRoePcnt),
 		Price:       v.AvgEntryPrice,
+		CostPrice:   v.AvgCostPrice,
+		LastPrice:   v.LastPrice,
+		MarkPrice:   v.MarkPrice,
 	}
 	return
 }
@@ -364,6 +383,75 @@ func (o PositionMap) Pos() (poses []Position) {
 			continue
 		}
 		poses = append(poses, *pos)
+	}
+	return
+}
+
+//type OrderMap map[string]*models.Order
+
+type OrderMap struct {
+	m map[string]*models.Order
+	sync.RWMutex
+}
+
+func NewOrderMap() (o *OrderMap) {
+	o = &OrderMap{
+		m: make(map[string]*models.Order),
+	}
+	return
+}
+
+func (o *OrderMap) Update(orders []*models.Order, isDelete bool) {
+	o.Lock()
+	defer o.Unlock()
+
+	var old *models.Order
+	var ok bool
+	for _, v := range orders {
+		if isDelete {
+			delete(o.m, *v.OrderID)
+		} else {
+			old, ok = o.m[*v.OrderID]
+			if !ok {
+				o.m[*v.OrderID] = v
+				continue
+			}
+
+			if v.Price > 0 {
+				old.Price = v.Price
+			}
+			if v.OrderQty > 0 {
+				old.OrderQty = v.OrderQty
+			}
+			if v.OrdStatus != "" {
+				old.OrdStatus = v.OrdStatus
+			}
+			if v.AvgPx > 0 {
+				old.AvgPx = v.AvgPx
+			}
+			if v.CumQty > 0 {
+				old.CumQty = v.CumQty
+			}
+			if v.SimpleCumQty > 0 {
+				old.SimpleCumQty = v.SimpleCumQty
+			}
+			old.Timestamp = v.Timestamp // 2018-10-12T02:33:18.886Z
+		}
+	}
+	return
+}
+
+func (o *OrderMap) Orders() (orders []Order) {
+	o.RLock()
+	defer o.RUnlock()
+
+	var pos *Order
+	for _, v := range o.m {
+		pos = transOrder(v)
+		if pos == nil {
+			continue
+		}
+		orders = append(orders, *pos)
 	}
 	return
 }

@@ -5,23 +5,27 @@ import (
 	"net/url"
 	"time"
 
-	. "github.com/SuperGod/coinex"
-	. "github.com/SuperGod/trademodel"
+	. "github.com/sumorf/coinex"
+	. "github.com/sumorf/trademodel"
 
-	apiclient "github.com/SuperGod/coinex/bitmex/client"
-	"github.com/SuperGod/coinex/bitmex/client/instrument"
-	"github.com/SuperGod/coinex/bitmex/client/order_book"
-	"github.com/SuperGod/coinex/bitmex/client/position"
-	"github.com/SuperGod/coinex/bitmex/client/trade"
-	apiuser "github.com/SuperGod/coinex/bitmex/client/user"
-	"github.com/SuperGod/coinex/bitmex/models"
 	"github.com/go-openapi/strfmt"
 	log "github.com/sirupsen/logrus"
+	apiclient "github.com/sumorf/coinex/bitmex/client"
+	"github.com/sumorf/coinex/bitmex/client/instrument"
+	"github.com/sumorf/coinex/bitmex/client/order_book"
+	"github.com/sumorf/coinex/bitmex/client/position"
+	"github.com/sumorf/coinex/bitmex/client/trade"
+	apiuser "github.com/sumorf/coinex/bitmex/client/user"
+	"github.com/sumorf/coinex/bitmex/models"
 )
 
 const (
 	BaseURL     = "www.bitmex.com"
 	TestBaseURL = "testnet.bitmex.com"
+)
+
+var (
+	timeLocal, _ = time.LoadLocation("Local")
 )
 
 type Bitmex struct {
@@ -139,19 +143,43 @@ func (b *Bitmex) Positions() (positions []Position, err error) {
 		positions = b.wsAPI.GetLastPos()
 		return
 	}
-	pos, err := b.api.Position.PositionGet(&position.PositionGetParams{}, nil)
+	return b.GetPositions()
+}
+
+// GetPositions get current positions
+func (b *Bitmex) GetPositions() (positions []Position, err error) {
+	var pos *position.PositionGetOK
+	pos, err = b.api.Position.PositionGet(&position.PositionGetParams{}, nil)
 	if err != nil {
 		return
 	}
 	var position *Position
 	for _, v := range pos.Payload {
+		log.Printf("%#v", v)
 		position = transPosition(v)
-		if pos == nil {
+		if position == nil {
 			continue
 		}
 		// UnrealisedRoePcnt 是按标记价格计算的盈亏
+		// UnrealisedPnl 未实现盈亏
+		// UnrealisedPnlPcnt 未实现盈亏%
+		// markPrice 标记价
+		// avgEntryPrice 开仓均价
 		positions = append(positions, *position)
 	}
+	return
+}
+
+// UpdatePositions update current positions
+func (b *Bitmex) UpdatePositions() (err error) {
+	var pos *position.PositionGetOK
+	pos, err = b.api.Position.PositionGet(&position.PositionGetParams{}, nil)
+	if err != nil {
+		return
+	}
+	positions := pos.Payload
+	b.wsAPI.pos.Update(positions)
+	b.wsAPI.SetLastPos(b.wsAPI.pos.Pos())
 	return
 }
 
@@ -161,7 +189,45 @@ func (b *Bitmex) ContractBalances() (balances map[Contract]Balance, err error) {
 	if err != nil {
 		return
 	}
-	fmt.Println(wallet)
+	// fmt.Println(wallet)
+	c := Contract{}
+	balances = make(map[Contract]Balance)
+	balance := Balance{
+		Available: float64(wallet.Payload.Amount),
+		Balance:   float64(wallet.Payload.Amount),
+		Currency:  *wallet.Payload.Currency,
+		Frozen:    0,
+	}
+	balances[c] = balance
+	return
+}
+
+// Balance get balance of user
+func (b *Bitmex) Balance() (balance Balance, err error) {
+	var wallet *apiuser.UserGetWalletOK
+	wallet, err = b.api.User.UserGetWallet(&apiuser.UserGetWalletParams{}, nil)
+	if err != nil {
+		return
+	}
+	balance.Available = float64(wallet.Payload.Amount)
+	balance.Balance = float64(wallet.Payload.Amount)
+	balance.Currency = *wallet.Payload.Currency
+	balance.Frozen = 0
+	return
+}
+
+// GetWalletHistory get wallet history
+func (b *Bitmex) GetWalletHistory() (trans []*models.Transaction, err error) {
+	var walletHistory *apiuser.UserGetWalletHistoryOK
+	currency := "XBt"
+	params := apiuser.UserGetWalletHistoryParams{
+		Currency: &currency,
+	}
+	walletHistory, err = b.api.User.UserGetWalletHistory(&params, nil)
+	if err != nil {
+		return
+	}
+	trans = walletHistory.Payload
 	return
 }
 
@@ -240,12 +306,16 @@ func (b *Bitmex) Ticker() (ticker Ticker, err error) {
 	depth := b.wsAPI.GetLastDepth()
 	ticker.Last = trade.Price
 	// ticker.Volume = trade.H
-	ticker.Ask = depth.Buys[0].Price
-	ticker.Bid = depth.Sells[0].Price
+	if len(depth.Buys) > 0 {
+		ticker.Ask = depth.Buys[0].Price
+	}
+	if len(depth.Sells) > 0 {
+		ticker.Bid = depth.Sells[0].Price
+	}
 	return
 }
 
-// Ticker
+// GetTicker get ticker
 func (b *Bitmex) GetTicker() (ticker Ticker, err error) {
 	reverse := true
 	nCount := int32(10)
@@ -261,8 +331,11 @@ func (b *Bitmex) GetTicker() (ticker Ticker, err error) {
 	if err != nil {
 		return
 	}
+
 	v := ret2.Payload[len(ret2.Payload)-1]
 	ticker.Last = v.Price
+	tm := time.Time(*v.Timestamp).In(timeLocal)
+	ticker.Timestamp = tm
 	ticker.Volume = v.HomeNotional
 	ticker.CurrencyPair = b.symbol
 	ticker.Ask = depth.Sells[0].Price

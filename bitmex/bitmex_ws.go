@@ -12,13 +12,15 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/SuperGod/coinex"
+	"github.com/go-openapi/strfmt"
 
-	. "github.com/SuperGod/trademodel"
+	. "github.com/sumorf/coinex"
 
-	"github.com/SuperGod/coinex/bitmex/models"
+	. "github.com/sumorf/trademodel"
+
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
+	"github.com/sumorf/coinex/bitmex/models"
 )
 
 const (
@@ -77,6 +79,7 @@ type BitmexWS struct {
 	orderBook              OrderBookMap
 	trades                 []*models.Trade
 	pos                    PositionMap
+	orders                 *OrderMap
 
 	pongChan chan int
 	shutdown *Shutdown
@@ -89,6 +92,9 @@ type BitmexWS struct {
 
 	lastPosition      []Position
 	lastPositionMutex sync.RWMutex
+
+	lastOrder      []Order
+	lastOrderMutex sync.RWMutex
 
 	tradeChan chan Trade
 	depthChan chan Depth
@@ -117,12 +123,16 @@ func NewBitmexWSWithURL(symbol, key, secret, proxy, wsURL string) (bw *BitmexWS)
 	bw.proxy = proxy
 	bw.orderBook = NewOrderBookMap()
 	bw.pos = NewPositionMap()
+	bw.orders = NewOrderMap()
 	bw.pongChan = make(chan int, 1)
 	bw.shutdown = NewRoutineManagement()
 	bw.timer = time.NewTimer(WSTimeOut)
-	bw.subcribeTypes = []SubscribeInfo{SubscribeInfo{Op: BitmexWSOrderbookL2, Param: bw.symbol},
+	bw.subcribeTypes = []SubscribeInfo{
+		SubscribeInfo{Op: BitmexWSOrderbookL2, Param: bw.symbol},
 		SubscribeInfo{Op: BitmexWSTrade, Param: bw.symbol},
-		SubscribeInfo{Op: BitmexWSPosition, Param: bw.symbol}}
+		SubscribeInfo{Op: BitmexWSPosition, Param: bw.symbol},
+		SubscribeInfo{Op: BitmexWSOrder, Param: bw.symbol},
+	}
 	bw.klineChan = make(map[string]chan *Candle)
 	return
 }
@@ -193,6 +203,55 @@ func (bw *BitmexWS) GetLastPos() (poses []Position) {
 	poses = bw.lastPosition
 	bw.lastPositionMutex.RUnlock()
 	// log.Debug("processPosition", poses)
+	return
+}
+
+func (bw *BitmexWS) UpdateOrders(orders []Order) {
+	tOrders := []*models.Order{}
+	for _, order := range orders {
+		tOrder := &models.Order{
+			OrderID:   &order.OrderID,
+			Currency:  order.Currency,
+			OrderQty:  int64(order.Amount),
+			AvgPx:     order.PriceAvg,
+			Price:     order.Price,
+			OrdStatus: order.Status,
+			Side:      order.Side,
+			Timestamp: strfmt.DateTime(order.Time),
+		}
+		tOrders = append(tOrders, tOrder)
+	}
+	bw.orders.Update(tOrders, false)
+	bw.SetLastOrders(bw.orders.Orders())
+}
+
+func (bw *BitmexWS) SetLastOrders(orders []Order) {
+	bw.lastOrderMutex.Lock()
+	bw.lastOrder = orders
+	bw.lastOrderMutex.Unlock()
+}
+
+func (bw *BitmexWS) GetLastOrders() (orders []Order) {
+	bw.lastOrderMutex.RLock()
+	orders = bw.lastOrder
+	bw.lastOrderMutex.RUnlock()
+	return
+}
+
+func (bw *BitmexWS) GetLastOrder(oid string) (order Order, err error) {
+	flag := false
+	bw.lastOrderMutex.RLock()
+	for _, o := range bw.lastOrder {
+		if o.OrderID == oid {
+			order = o
+			flag = true
+			break
+		}
+	}
+	bw.lastOrderMutex.RUnlock()
+	if !flag {
+		err = NoOrderFound
+	}
 	return
 }
 
@@ -396,14 +455,10 @@ func (bw *BitmexWS) handleMessage() {
 			case BitmexWSPosition:
 				// log.Debug("processPosition", msg)
 				err = bw.processPosition(&ret)
-			case BitmexWSTradeBin1m:
-				err = bw.processTradeBin("1m", &ret)
-			case BitmexWSTradeBin5m:
-				err = bw.processTradeBin("5m", &ret)
-			case BitmexWSTradeBin1h:
-				err = bw.processTradeBin("1h", &ret)
-			case BitmexWSTradeBin1d:
-				err = bw.processTradeBin("1d", &ret)
+			case BitmexWSOrder:
+				err = bw.processOrder(&ret)
+			case BitmexWSTradeBin1m, BitmexWSTradeBin5m, BitmexWSTradeBin1h, BitmexWSTradeBin1d:
+				err = bw.processTradeBin(ret.Table, &ret)
 			default:
 				log.Println(ret.Table, msg)
 			}
@@ -518,6 +573,21 @@ func (bw *BitmexWS) processPosition(msg *Resp) (err error) {
 		return
 	}
 	bw.SetLastPos(bw.pos.Pos())
+	return
+}
+
+func (bw *BitmexWS) processOrder(msg *Resp) (err error) {
+	datas := msg.GetOrders()
+	switch msg.Action {
+	case bitmexActionInitialData, bitmexActionUpdateData, bitmexActionInsertData:
+		bw.orders.Update(datas, false)
+	case bitmexActionDeleteData:
+		bw.orders.Update(datas, true)
+	default:
+		err = fmt.Errorf("unsupport action:%s", msg.Action)
+		return
+	}
+	bw.SetLastOrders(bw.orders.Orders())
 	return
 }
 
