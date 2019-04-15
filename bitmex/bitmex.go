@@ -1,8 +1,10 @@
 package bitmex
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	. "github.com/SuperGod/coinex"
@@ -402,7 +404,27 @@ func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []in
 		}
 		return
 	}
-	d := NewDataDownload(strfmt.DateTime(start), strfmt.DateTime(end), paramFunc, downFunc, 500, 10)
+	duration := end.Sub(start)
+	if duration < 0 {
+		err = errors.New("time range error")
+		return
+	}
+	var nTotal int
+	switch strings.ToLower(bSize) {
+	case "1m":
+		nTotal = int(duration / time.Minute)
+	case "5m":
+		nTotal = int(duration / (5 * time.Minute))
+	case "1h":
+		nTotal = int(duration / time.Hour)
+	case "1d":
+		nTotal = int(duration / (time.Hour * 24))
+	}
+	nRoutine := nTotal / 500
+	if nTotal%500 != 0 {
+		nRoutine++
+	}
+	d := NewDataDownload(strfmt.DateTime(start), strfmt.DateTime(end), paramFunc, downFunc, 500, nRoutine)
 	klines = d.Start()
 	return
 }

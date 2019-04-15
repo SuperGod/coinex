@@ -53,21 +53,25 @@ func (d *DataDownload) Start() (dataCh chan []interface{}) {
 }
 func (d *DataDownload) Run() {
 	d.wg.Add(d.nRoutine)
+	nMaxTotal := d.nRoutine * int(d.onceCount)
 	for i := 0; i != d.nRoutine; i++ {
 		go d.routine(i)
 	}
 	nStart := 0
 	for {
 		if d.IsFinish() {
-			close(d.start)
 			break
 		}
 		d.start <- nStart
 		nStart += int(d.onceCount)
+		if nStart >= nMaxTotal {
+			break
+		}
 	}
+	close(d.start)
 	d.wg.Wait()
 	close(d.dataCh)
-	log.Info("DataDownload finished...")
+	log.Debug("DataDownload finished...")
 	return
 }
 
@@ -97,7 +101,7 @@ Outer:
 		}
 		time.Sleep(time.Microsecond)
 	}
-	log.Info("routine finish:", nIndex)
+	log.Debug("routine finish:", nIndex)
 }
 
 func (d *DataDownload) RunOnce(start int) (bFinish bool, err error) {
@@ -105,7 +109,7 @@ func (d *DataDownload) RunOnce(start int) (bFinish bool, err error) {
 	nStart := int32(start)
 	params := d.paramFunc()
 	params.SetStartTime(&d.startTime)
-	params.SetStartTime(&d.endTime)
+	params.SetEndTime(&d.endTime)
 	params.SetCount(&d.onceCount)
 	params.SetStart(&nStart)
 	ret, err := d.downFunc(params)
