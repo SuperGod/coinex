@@ -98,6 +98,10 @@ func NewRequestBuffer() (r *RequestBuffer) {
 	return
 }
 
+func (r *RequestBuffer) GetHeaderParams() http.Header {
+	return r.header
+}
+
 func (r *RequestBuffer) SetHeaderParam(name string, values ...string) error {
 	if r.header == nil {
 		r.header = make(http.Header)
