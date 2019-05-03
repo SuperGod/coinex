@@ -182,6 +182,13 @@ func (r *Resp) Decode(buf []byte) (err error) {
 				return
 			}
 			r.data = klines
+		case BitmexWSOrder:
+			var orders []*models.Order
+			err = json.Unmarshal([]byte(raw), &orders)
+			if err != nil {
+				return
+			}
+			r.data = orders
 		default:
 			log.Debug("unsupport table:", r.Table)
 		}
@@ -257,6 +264,17 @@ func (o OrderBookMap) GetDepth() (depth Depth) {
 		return depth.Sells[i].Price < depth.Sells[j].Price
 	})
 	depth.UpdateTime = time.Now()
+	return
+}
+
+func (r *Resp) GetOrder() (orders []*models.Order) {
+	if r.Table != BitmexWSOrder || r.data == nil {
+		return
+	}
+	orders, ok := r.data.([]*models.Order)
+	if !ok {
+		return
+	}
 	return
 }
 
@@ -364,6 +382,60 @@ func (o PositionMap) Pos() (poses []Position) {
 			continue
 		}
 		poses = append(poses, *pos)
+	}
+	return
+}
+
+type OrderMap map[string]*models.Order
+
+func NewOrderMap() OrderMap {
+	return make(OrderMap)
+}
+
+func (o OrderMap) Update(orders []*models.Order) (ret []*models.Order) {
+	var old *models.Order
+	var ok bool
+	for _, v := range orders {
+		// if v.CurrentQty == 0 {
+		// delete(o, *v.Symbol)
+		// } else {
+		old, ok = o[*v.OrderID]
+		if ok {
+			ret = append(ret, old)
+			if v.OrdStatus != "" {
+				old.OrdStatus = v.OrdStatus
+			}
+			if v.AvgPx != 0 {
+				old.AvgPx = v.AvgPx
+			}
+
+			if v.Price != 0 {
+				old.Price = v.Price
+			}
+			if v.OrderQty != 0 {
+				old.OrderQty = v.OrderQty
+			}
+			if v.Text != "" {
+				old.Text = v.Text
+			}
+			if v.WorkingIndicator {
+				old.WorkingIndicator = v.WorkingIndicator
+			}
+			if v.OrdStatus == "Canceled" {
+				delete(o, *v.OrderID)
+			}
+		} else {
+			ret = append(ret, v)
+			o[*v.OrderID] = v
+		}
+		// }
+	}
+	return
+}
+
+func (o OrderMap) Orders() (orders []Order) {
+	for _, v := range o {
+		orders = append(orders, *transOrder(v))
 	}
 	return
 }

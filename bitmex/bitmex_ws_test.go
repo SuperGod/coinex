@@ -47,3 +47,41 @@ func TestQuote(t *testing.T) {
 		log.Println(kline)
 	}
 }
+
+func TestWSOrder(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	clt := GetWSClient()
+	subs := []SubscribeInfo{SubscribeInfo{Op: BitmexWSOrder, Param: "XBTUSD"}}
+	clt.SetSubscribe(subs)
+	err := clt.Connect()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	orderChan := make(chan []Order, 1024)
+	clt.SetOrderChan(orderChan)
+	for orders := range orderChan {
+		log.Println("orders changed")
+		for _, v := range orders {
+			log.Println(v)
+		}
+	}
+}
+
+func TestWSPosition(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	clt := GetWSClient()
+	subs := []SubscribeInfo{SubscribeInfo{Op: BitmexWSPosition, Param: "XBTUSD"}}
+	clt.SetSubscribe(subs)
+	err := clt.Connect()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	posChan := make(chan []Position, 1024)
+	clt.SetPositionChan(posChan)
+	for pos := range posChan {
+		log.Println("position changed")
+		for _, v := range pos {
+			log.Println(v)
+		}
+	}
+}

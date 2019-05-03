@@ -77,6 +77,7 @@ type BitmexWS struct {
 	orderBook              OrderBookMap
 	trades                 []*models.Trade
 	pos                    PositionMap
+	orders                 OrderMap
 
 	pongChan chan int
 	shutdown *Shutdown
@@ -90,12 +91,18 @@ type BitmexWS struct {
 	lastPosition      []Position
 	lastPositionMutex sync.RWMutex
 
-	tradeChan chan Trade
-	depthChan chan Depth
-	klineChan map[string]chan *Candle
-	timer     *time.Timer
+	lastOrders      []Order
+	lastOrdersMutex sync.RWMutex
+
+	tradeChan    chan Trade
+	depthChan    chan Depth
+	klineChan    map[string]chan *Candle
+	positionChan chan []Position
+	orderChan    chan []Order
+	timer        *time.Timer
 
 	subcribeTypes []SubscribeInfo
+	isRuning      bool
 }
 
 func NewBitmexWS(symbol, key, secret, proxy string) (bw *BitmexWS) {
@@ -137,6 +144,15 @@ func (bw *BitmexWS) SetKlineChan(binSize string, klineChan chan *Candle) (err er
 	return
 }
 
+func (bw *BitmexWS) SetPositionChan(posChan chan []Position) (err error) {
+	bw.positionChan = posChan
+	return
+}
+func (bw *BitmexWS) SetOrderChan(orderChan chan []Order) (err error) {
+	bw.orderChan = orderChan
+	return
+}
+
 func (bw *BitmexWS) SetSubscribe(subcribeTypes []SubscribeInfo) {
 	bw.subcribeTypes = subcribeTypes
 	return
@@ -144,6 +160,9 @@ func (bw *BitmexWS) SetSubscribe(subcribeTypes []SubscribeInfo) {
 
 func (bw *BitmexWS) AddSubscribe(subcribeInfo SubscribeInfo) {
 	bw.subcribeTypes = append(bw.subcribeTypes, subcribeInfo)
+	if bw.isRuning {
+		bw.subscribe()
+	}
 }
 
 func (bw *BitmexWS) SetProxy(proxy string) {
@@ -186,12 +205,32 @@ func (bw *BitmexWS) SetLastPos(pos []Position) {
 	bw.lastPositionMutex.Lock()
 	bw.lastPosition = pos
 	bw.lastPositionMutex.Unlock()
+	if bw.positionChan != nil {
+		bw.positionChan <- pos
+	}
 }
 
 func (bw *BitmexWS) GetLastPos() (poses []Position) {
 	bw.lastPositionMutex.RLock()
 	poses = bw.lastPosition
 	bw.lastPositionMutex.RUnlock()
+	// log.Debug("processPosition", poses)
+	return
+}
+
+func (bw *BitmexWS) SetLastOrders(orders []Order) {
+	bw.lastOrdersMutex.Lock()
+	bw.lastOrders = orders
+	bw.lastOrdersMutex.Unlock()
+	if bw.orderChan != nil {
+		bw.orderChan <- orders
+	}
+}
+
+func (bw *BitmexWS) GetLastOrders() (orders []Order) {
+	bw.lastOrdersMutex.RLock()
+	orders = bw.lastOrders
+	bw.lastOrdersMutex.RUnlock()
 	// log.Debug("processPosition", poses)
 	return
 }
@@ -248,6 +287,7 @@ func (bw *BitmexWS) Connect() (err error) {
 			return
 		}
 	}
+	bw.isRuning = true
 	return
 }
 
@@ -255,6 +295,7 @@ func (bw *BitmexWS) Connect() (err error) {
 func (bw *BitmexWS) connectionHandler() {
 	defer func() {
 		log.Debug("Bitmex websocket: Connection handler routine shutdown")
+		bw.isRuning = false
 	}()
 
 	shutdown := bw.shutdown.addRoutine()
@@ -404,6 +445,8 @@ func (bw *BitmexWS) handleMessage() {
 				err = bw.processTradeBin("1h", &ret)
 			case BitmexWSTradeBin1d:
 				err = bw.processTradeBin("1d", &ret)
+			case BitmexWSOrder:
+				err = bw.processOrder(&ret)
 			default:
 				log.Println(ret.Table, msg)
 			}
@@ -540,5 +583,21 @@ func (bw *BitmexWS) processTradeBin(binSize string, msg *Resp) (err error) {
 		err = fmt.Errorf("unsupport action:%s", msg.Action)
 		return
 	}
+	return
+}
+
+func (bw *BitmexWS) processOrder(msg *Resp) (err error) {
+	datas := msg.GetOrder()
+	switch msg.Action {
+	case bitmexActionInitialData:
+		bw.orders = NewOrderMap()
+	case bitmexActionUpdateData:
+	case bitmexActionInsertData:
+	// case bitmexActionDeleteData:
+	default:
+		err = fmt.Errorf("unsupport order action:%s", msg.Action)
+	}
+	bw.orders.Update(datas)
+	bw.SetLastOrders(bw.orders.Orders())
 	return
 }

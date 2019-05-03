@@ -330,3 +330,11 @@ func (b *Bitmex) Order(oid string) (newOrder *Order, err error) {
 	newOrder = transOrder(orderInfo.Payload[0])
 	return
 }
+
+func IsOrderFilled(o *Order) bool {
+	return o.Status == "Filled"
+}
+
+func IsOrderCanceled(o *Order) bool {
+	return o.Status == "Canceled"
+}
