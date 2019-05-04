@@ -79,7 +79,6 @@ type BitmexWS struct {
 	pos                    PositionMap
 	orders                 OrderMap
 
-	pongChan chan int
 	shutdown *Shutdown
 
 	lastDepth      Depth
@@ -103,6 +102,7 @@ type BitmexWS struct {
 
 	subcribeTypes []SubscribeInfo
 	isRuning      bool
+	wsConnMutex   sync.Mutex
 }
 
 func NewBitmexWS(symbol, key, secret, proxy string) (bw *BitmexWS) {
@@ -124,7 +124,6 @@ func NewBitmexWSWithURL(symbol, key, secret, proxy, wsURL string) (bw *BitmexWS)
 	bw.proxy = proxy
 	bw.orderBook = NewOrderBookMap()
 	bw.pos = NewPositionMap()
-	bw.pongChan = make(chan int, 1)
 	bw.shutdown = NewRoutineManagement()
 	bw.timer = time.NewTimer(WSTimeOut)
 	bw.subcribeTypes = []SubscribeInfo{SubscribeInfo{Op: BitmexWSOrderbookL2, Param: bw.symbol},
@@ -134,12 +133,26 @@ func NewBitmexWSWithURL(symbol, key, secret, proxy, wsURL string) (bw *BitmexWS)
 	return
 }
 
+func (bw *BitmexWS) writeJSON(data interface{}) (err error) {
+	if bw.wsConn == nil {
+		return
+	}
+	bw.wsConnMutex.Lock()
+	err = bw.wsConn.WriteJSON(data)
+	bw.wsConnMutex.Unlock()
+	return
+}
+
 func (bw *BitmexWS) SetSymbol(symbol string) (err error) {
 	bw.symbol = symbol
 	return
 }
 
 func (bw *BitmexWS) SetKlineChan(binSize string, klineChan chan *Candle) (err error) {
+	if klineChan == nil {
+		delete(bw.klineChan, binSize)
+		return
+	}
 	bw.klineChan[binSize] = klineChan
 	return
 }
@@ -158,11 +171,18 @@ func (bw *BitmexWS) SetSubscribe(subcribeTypes []SubscribeInfo) {
 	return
 }
 
-func (bw *BitmexWS) AddSubscribe(subcribeInfo SubscribeInfo) {
+// AddSubscribe add subcribe
+func (bw *BitmexWS) AddSubscribe(subcribeInfo SubscribeInfo) (err error) {
 	bw.subcribeTypes = append(bw.subcribeTypes, subcribeInfo)
 	if bw.isRuning {
-		bw.subscribe()
+		var subscriber WSCmd
+		subscriber.Command = "subscribe"
+		subscriber.Args = []interface{}{
+			subcribeInfo.Op + ":" + subcribeInfo.Param,
+		}
+		err = bw.writeJSON(subscriber)
 	}
+	return
 }
 
 func (bw *BitmexWS) SetProxy(proxy string) {
@@ -303,30 +323,14 @@ func (bw *BitmexWS) connectionHandler() {
 	for {
 		select {
 		case <-bw.timer.C:
-			timeout := time.After(WSTimeOut)
-			log.Println("time out first,send ping...")
-			err := bw.wsConn.WriteJSON("ping")
+			log.Debug("time out first,send ping...")
+			err := bw.wsConn.WriteControl(websocket.PingMessage, nil, time.Now().Add(WSTimeOut))
 			if err != nil {
+				log.Error("Bitmex websocket: ping failed, reconnect....")
 				bw.reconnect()
 				return
 			}
-		OUT:
-			for {
-				select {
-				case <-bw.pongChan:
-					log.Debug("Bitmex websocket: PONG chan received")
-					// bw.timer.Reset(WSTimeOut)
-					time.Sleep(time.Microsecond)
-					break OUT
-				case <-timeout:
-					log.Println("Bitmex websocket: Connection timed out - Closing connection....")
-					bw.wsConn.Close()
-
-					log.Println("Bitmex websocket: Connection timed out - Reconnecting...")
-					bw.reconnect()
-					return
-				}
-			}
+			log.Debug("Bitmex websocket ping success")
 		case <-shutdown:
 			log.Println("Bitmex websocket: shutdown requested - Closing connection....")
 			bw.wsConn.Close()
@@ -365,7 +369,7 @@ func (bw *BitmexWS) sendAuth() error {
 	sendAuth.Args = append(sendAuth.Args, bw.key)
 	sendAuth.Args = append(sendAuth.Args, timestamp)
 	sendAuth.Args = append(sendAuth.Args, signature)
-	return bw.wsConn.WriteJSON(sendAuth)
+	return bw.writeJSON(sendAuth)
 }
 
 // subscribe subscribes to a websocket channel
@@ -376,13 +380,25 @@ func (bw *BitmexWS) subscribe() (err error) {
 
 	// Announcement subscribe
 	// subscriber.Args = append(subscriber.Args, bitmexWSAnnouncement)
+	var nCount int
 	for _, v := range bw.subcribeTypes {
+		nCount++
+		if nCount > 20 {
+			err = bw.writeJSON(subscriber)
+			if err != nil {
+				return err
+			}
+			subscriber.Args = []interface{}{}
+			nCount = 1
+		}
 		subscriber.Args = append(subscriber.Args,
 			v.Op+":"+v.Param)
 	}
-	err = bw.wsConn.WriteJSON(subscriber)
-	if err != nil {
-		return err
+	if len(subscriber.Args) > 0 {
+		err = bw.writeJSON(subscriber)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -399,13 +415,8 @@ func (bw *BitmexWS) handleMessage() {
 			return
 		}
 		msg = string(data)
-		if strings.Contains(msg, "pong") {
-			log.Debug("Bitmex websocket pong received")
-			bw.pongChan <- 1
-			continue
-		}
 		if strings.Contains(msg, "ping") {
-			err = bw.wsConn.WriteJSON("pong")
+			err = bw.writeJSON("pong")
 			if err != nil {
 				log.Error("Bitmex websocket error:", err.Error())
 			}
@@ -449,6 +460,9 @@ func (bw *BitmexWS) handleMessage() {
 				err = bw.processOrder(&ret)
 			default:
 				log.Println(ret.Table, msg)
+			}
+			if err != nil {
+				log.Error("process msg error:", msg, err.Error())
 			}
 		} else {
 

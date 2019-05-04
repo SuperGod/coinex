@@ -85,3 +85,20 @@ func TestWSPosition(t *testing.T) {
 		}
 	}
 }
+
+func TestWSKline(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	clt := GetWSClient()
+	err := clt.Connect()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	sub := SubscribeInfo{Op: BitmexWSTradeBin1m, Param: "XBTUSD"}
+	clt.AddSubscribe(sub)
+	klineChan := make(chan *Candle, 1024)
+	clt.SetKlineChan("1m", klineChan)
+
+	for candle := range klineChan {
+		log.Println(candle)
+	}
+}
