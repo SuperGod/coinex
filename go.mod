@@ -11,7 +11,7 @@ require (
 	github.com/go-openapi/loads v0.19.0 // indirect
 	github.com/go-openapi/runtime v0.19.0
 	github.com/go-openapi/spec v0.19.0 // indirect
-	github.com/go-openapi/strfmt v0.19.0
+	github.com/go-openapi/strfmt v0.19.1-0.20190411023235-e87a5af342a8
 	github.com/go-openapi/swag v0.19.0
 	github.com/go-openapi/validate v0.19.0
 	github.com/gorilla/websocket v1.4.0
