@@ -16,7 +16,9 @@ func GetClientByName(name string, bTest bool) (bm *Bitmex) {
 	} else {
 		bm = NewBitmex(key, secret)
 	}
-	bm.SetProxy(configs.Proxy)
+	if configs.Proxy != "" {
+		bm.SetProxy(configs.Proxy)
+	}
 	return bm
 }
 

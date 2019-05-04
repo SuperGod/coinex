@@ -25,7 +25,7 @@ func TestContracts(t *testing.T) {
 	api := GetClient()
 	contracts, err := api.Contracts()
 	if err != nil {
-		// log.Fatal(err.Error())
+		log.Fatal(err.Error())
 	}
 	log.Printf("%#v\n", contracts)
 }

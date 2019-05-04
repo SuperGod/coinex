@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,23 @@ func NewTransport(host, basePath, key, secret string, schemes []string) (t *Tran
 	t.Secret = secret
 	t.Runtime = httptransport.New(host, basePath, schemes)
 	t.Runtime.Producers["application/x-www-form-urlencoded"] = runtime.TextProducer()
+	return
+}
+func (t *Transport) SetProxy(proxy string) (err error) {
+	if proxy == "" {
+		return
+	}
+	uProxy, err := url.Parse(proxy)
+	if err != nil {
+		err = fmt.Errorf("transport set proxy %s error:%s", proxy, err.Error())
+		return
+	}
+	trans, ok := t.Transport.(*http.Transport)
+	if !ok {
+		err = fmt.Errorf("transport is not http.Transport :%s", reflect.TypeOf(t.Transport))
+		return
+	}
+	trans.Proxy = http.ProxyURL(uProxy)
 	return
 }
 

@@ -109,9 +109,11 @@ func (b *Bitmex) SetDepthChan(depthChan chan Depth) {
 func (b *Bitmex) SetProxy(proxy string) (err error) {
 	_, err = url.Parse(proxy)
 	if err != nil {
+		err = fmt.Errorf("set proxy %s error:%s", proxy, err.Error())
 		return
 	}
 	b.wsAPI.SetProxy(proxy)
+	err = b.trans.SetProxy(proxy)
 	return
 }
 

@@ -338,3 +338,7 @@ func IsOrderFilled(o *Order) bool {
 func IsOrderCanceled(o *Order) bool {
 	return o.Status == "Canceled"
 }
+
+func IsOrderLong(o *Order) bool {
+	return o.Side == "buy"
+}
