@@ -26,6 +26,7 @@ var (
 
 func transOrder(o *models.Order) (ret *Order) {
 	ret = &Order{OrderID: *o.OrderID,
+		Symbol:   o.Symbol,
 		Currency: o.Currency,
 		Amount:   float64(o.OrderQty),
 		Price:    o.AvgPx,
@@ -200,6 +201,7 @@ func (b *Bitmex) StopLoseSellMarket(price, amount float64) (ret *Order, err erro
 // if orderType is Buy, when marketPrice>= price, buy
 // if orderType is Sell, when marketPrice<=price, sell
 func (b *Bitmex) createStopOrder(stopPrice, price float64, amount int32, side, orderType, comment string) (newOrder *models.Order, err error) {
+	execInst := "Close"
 	params := order.OrderNewParams{
 		StopPx:   &stopPrice,
 		Side:     &side,
@@ -207,6 +209,7 @@ func (b *Bitmex) createStopOrder(stopPrice, price float64, amount int32, side, o
 		Text:     &comment,
 		OrderQty: &amount,
 		OrdType:  &orderType,
+		ExecInst: &execInst,
 	}
 	if price != 0 {
 		params.Price = &price

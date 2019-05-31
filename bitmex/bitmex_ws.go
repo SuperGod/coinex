@@ -411,7 +411,12 @@ func (bw *BitmexWS) handleMessage() {
 	for {
 		_, data, err = bw.wsConn.ReadMessage()
 		if err != nil {
-			log.Error("Bitmex websocket read error:", err.Error())
+			log.Error("Bitmex websocket read error,reconnect:", err.Error())
+			err = bw.wsConn.Close()
+			if err != nil {
+				log.Error("Bitmex websocket error close error:", err.Error())
+			}
+			bw.reconnect()
 			return
 		}
 		msg = string(data)

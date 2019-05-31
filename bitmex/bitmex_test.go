@@ -150,16 +150,18 @@ func TestShortMarket(t *testing.T) {
 func TestStopLimit(t *testing.T) {
 	api := GetClient()
 	high, low := GetHighLowPrice(t, api)
-	order1, err := api.StopLoseBuy(high, high+1, 10)
+	// order1, err := api.StopLoseBuy(high, high+1, 10)
+	order1, err := api.StopLoseBuyMarket(high, 10)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	t.Log("StopLoseBuy", order1)
-	order2, err := api.StopLoseSell(low, low-1, 10)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	t.Log("StopLoseSell", order2)
+	_ = low
+	// order2, err := api.StopLoseSell(low, low-1, 10)
+	// if err != nil {
+	// 	t.Fatal(err.Error())
+	// }
+	// t.Log("StopLoseSell", order2)
 }
 
 func TestStopMarket(t *testing.T) {
@@ -194,7 +196,8 @@ func TestOrders(t *testing.T) {
 }
 
 func TestCancelAllOrders(t *testing.T) {
-	api := GetClient()
+	// api := GetClient()
+	api := GetClientByName("bitmex2", false)
 	orders, err := api.CancelAllOrders()
 	if err != nil {
 		t.Fatal(err.Error())
@@ -203,7 +206,8 @@ func TestCancelAllOrders(t *testing.T) {
 }
 
 func TestKlineRecent(t *testing.T) {
-	api := GetClient()
+	api := NewBitmex("", "")
+	api.SetDebug(true)
 	klines, err := api.KlineRecent(10, "1m")
 	if err != nil {
 		t.Fatal(err.Error())
