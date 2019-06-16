@@ -282,6 +282,7 @@ func (b *Bitmex) SetSymbol(symbol string) (err error) {
 }
 
 func (b *Bitmex) SetContract(contract string) (err error) {
+	b.symbol = contract
 	return
 }
 
@@ -371,11 +372,12 @@ func (b *Bitmex) Trades(start, end time.Time) (trades []Trade, err error) {
 
 func (b *Bitmex) TradesChan(start, end time.Time) (trades chan []interface{}, err error) {
 	paramFunc := func() DownParam {
-		p := trade.NewTradeGetParams()
+		p := &downParam{bitmexDownParam: trade.NewTradeGetParams()}
 		return p
 	}
-	downFunc := func(param DownParam) (data []interface{}, err1 error) {
-		tradeParams := param.(*trade.TradeGetParams)
+	downFunc := func(param DownParam) (data []interface{}, isFinished bool, err1 error) {
+		p := param.(*downParam)
+		tradeParams := p.bitmexDownParam.(*trade.TradeGetParams)
 		trades, err1 := b.api.Trade.TradeGet(tradeParams)
 		if err1 != nil {
 			return
@@ -383,26 +385,56 @@ func (b *Bitmex) TradesChan(start, end time.Time) (trades chan []interface{}, er
 		for _, v := range trades.Payload {
 			data = append(data, v)
 		}
+
+		if len(data) < 500 {
+			isFinished = true
+		}
 		return
 	}
-	d := NewDataDownload(strfmt.DateTime(start), strfmt.DateTime(end), paramFunc, downFunc, 500, 10)
+	// FIXME: bugs
+	d := NewDataDownload(start, end, paramFunc, downFunc, 500, b.getSleepDuration())
 	trades = d.Start()
 	return
 }
 
+type bitmexDownParam interface {
+	SetStart(start *int32)
+	SetCount(count *int32)
+	SetStartTime(startTime *strfmt.DateTime)
+	SetEndTime(endTime *strfmt.DateTime)
+}
+
+type downParam struct {
+	bitmexDownParam
+}
+
+func (d *downParam) SetStartTime(startTime *time.Time) {
+	tStart := strfmt.DateTime(*startTime)
+	d.bitmexDownParam.SetStartTime(&tStart)
+}
+func (d *downParam) SetEndTime(endTime *time.Time) {
+	tEnd := strfmt.DateTime(*endTime)
+	d.bitmexDownParam.SetEndTime(&tEnd)
+}
+
 func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []interface{}, err error) {
 	paramFunc := func() DownParam {
-		params := &trade.TradeGetBucketedParams{BinSize: &bSize, Symbol: &b.symbol}
+		params := &downParam{bitmexDownParam: &trade.TradeGetBucketedParams{BinSize: &bSize, Symbol: &b.symbol}}
 		return params
 	}
-	downFunc := func(param DownParam) (data []interface{}, err1 error) {
-		params := param.(*trade.TradeGetBucketedParams)
+	downFunc := func(param DownParam) (data []interface{}, isFinished bool, err1 error) {
+		p := param.(*downParam)
+		params := p.bitmexDownParam.(*trade.TradeGetBucketedParams)
+		fmt.Println("start:", *params.Start)
 		klineInfo, err1 := b.api.Trade.TradeGetBucketed(params)
 		if err1 != nil {
 			return
 		}
 		for _, v := range klineInfo.Payload {
 			data = append(data, transOneCandle(v))
+		}
+		if len(data) < 500 {
+			isFinished = true
 		}
 		return
 	}
@@ -422,11 +454,17 @@ func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []in
 	case "1d":
 		nTotal = int(duration / (time.Hour * 24))
 	}
-	nRoutine := nTotal / 500
-	if nTotal%500 != 0 {
-		nRoutine++
-	}
-	d := NewDataDownload(strfmt.DateTime(start), strfmt.DateTime(end), paramFunc, downFunc, 500, nRoutine)
+	fmt.Println("total:", nTotal)
+
+	d := NewDataDownload(start, end, paramFunc, downFunc, 500, b.getSleepDuration())
 	klines = d.Start()
 	return
+}
+
+func (b *Bitmex) getSleepDuration() time.Duration {
+	nDuration := time.Second * 2
+	if b.APISecret != "" {
+		nDuration = time.Second
+	}
+	return nDuration
 }

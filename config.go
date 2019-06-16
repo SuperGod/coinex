@@ -7,9 +7,10 @@ import (
 )
 
 type ConfigItem struct {
-	Type   string
-	Key    string
-	Secret string
+	Type       string
+	Key        string
+	Secret     string
+	Passphrase string
 }
 
 type Config struct {
@@ -33,6 +34,17 @@ func LoadConfigFile(cfg string) (configs Config, err error) {
 	defer f.Close()
 	dec := json.NewDecoder(f)
 	err = dec.Decode(&configs)
+	return
+}
+
+func (c *Config) GetConfig(name string) (key, secret, passphrase string) {
+	ex, ok := c.Exchanges[name]
+	if !ok {
+		return
+	}
+	key = ex.Key
+	secret = ex.Secret
+	passphrase = ex.Passphrase
 	return
 }
 

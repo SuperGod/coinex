@@ -16,7 +16,10 @@ require (
 	github.com/go-openapi/validate v0.19.0
 	github.com/gorilla/websocket v1.4.0
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
+	github.com/lunny/log v0.0.0-20160921050905-7887c61bf0de
 	github.com/mailru/easyjson v0.0.0-20190403194419-1ea4449da983 // indirect
+	github.com/mattn/go-sqlite3 v1.10.0 // indirect
+	github.com/okcoin-okex/open-api-v3-sdk v0.0.0-20190507094206-e7f179c24e93
 	github.com/sirupsen/logrus v1.4.1
 	github.com/tidwall/gjson v1.2.1
 	github.com/tidwall/match v1.0.1 // indirect
