@@ -4,6 +4,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/beefsack/go-rate"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -28,17 +30,18 @@ type DataDownload struct {
 	endTime   time.Time
 	nFinish   int32 // 0 not finish, 1 finish
 	nTotal    int
+	limit     *rate.RateLimiter
 }
 
-func NewDataDownload(start, end time.Time, paramFunc NewParamFunc, downFunc DownFunc, onceCount int32, nDuration time.Duration) (d *DataDownload) {
+func NewDataDownload(start, end time.Time, paramFunc NewParamFunc, downFunc DownFunc, onceCount int32, nDuration time.Duration, nLimit int) (d *DataDownload) {
 	d = new(DataDownload)
 	d.paramFunc = paramFunc
-	d.nDuration = nDuration
 	d.dataCh = make(chan []interface{}, 1024)
 	d.downFunc = downFunc
 	d.onceCount = onceCount
 	d.startTime = start
 	d.endTime = end
+	d.limit = rate.New(nLimit, nDuration)
 	return
 }
 
@@ -54,10 +57,8 @@ func (d *DataDownload) Run() {
 	}()
 
 	var nStart int32
-	var t1 time.Time
-	var nSleep time.Duration
-
 	for {
+		d.limit.Wait()
 		params := d.paramFunc()
 		params.SetStartTime(&d.startTime)
 		params.SetEndTime(&d.endTime)
@@ -67,14 +68,10 @@ func (d *DataDownload) Run() {
 		if err != nil {
 			return
 		}
-		t1 = time.Now()
 		if len(ret) > 0 {
 			d.dataCh <- ret
 		}
-		nSleep = time.Now().Sub(t1)
-		if nSleep < d.nDuration {
-			time.Sleep(d.nDuration - nSleep)
-		}
+
 		nStart += int32(len(ret))
 		if isFinished {
 			d.SetFinish(1)

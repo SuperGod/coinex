@@ -391,8 +391,8 @@ func (b *Bitmex) TradesChan(start, end time.Time) (trades chan []interface{}, er
 		}
 		return
 	}
-	// FIXME: bugs
-	d := NewDataDownload(start, end, paramFunc, downFunc, 500, b.getSleepDuration())
+	duration, count := b.getSleepDuration()
+	d := NewDataDownload(start, end, paramFunc, downFunc, 500, duration, count)
 	trades = d.Start()
 	return
 }
@@ -454,17 +454,19 @@ func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []in
 	case "1d":
 		nTotal = int(duration / (time.Hour * 24))
 	}
-	fmt.Println("total:", nTotal)
+	log.Debug("total:", nTotal)
 
-	d := NewDataDownload(start, end, paramFunc, downFunc, 500, b.getSleepDuration())
+	duration, count := b.getSleepDuration()
+	d := NewDataDownload(start, end, paramFunc, downFunc, 500, duration, count)
 	klines = d.Start()
 	return
 }
 
-func (b *Bitmex) getSleepDuration() time.Duration {
-	nDuration := time.Second * 2
+func (b *Bitmex) getSleepDuration() (duration time.Duration, count int) {
+	duration = time.Minute
+	count = 30
 	if b.APISecret != "" {
-		nDuration = time.Second
+		count = 60
 	}
-	return nDuration
+	return
 }

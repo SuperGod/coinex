@@ -1,10 +1,9 @@
-package bitmex
+package coinex
 
 import (
 	"testing"
 	"time"
 
-	"github.com/go-openapi/strfmt"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,10 +24,10 @@ func (p *TestParam) SetCount(count *int32) {
 	p.Count = *count
 }
 
-func (p *TestParam) SetStartTime(startTime *strfmt.DateTime) {
+func (p *TestParam) SetStartTime(startTime *time.Time) {
 }
 
-func (p *TestParam) SetEndTime(endTime *strfmt.DateTime) {
+func (p *TestParam) SetEndTime(endTime *time.Time) {
 }
 
 type TestDataCenter struct {
@@ -38,12 +37,13 @@ type TestDataCenter struct {
 	// Once        int
 }
 
-func (d *TestDataCenter) SampleDownImpl(param DownParam) (data []interface{}, err error) {
+func (d *TestDataCenter) SampleDownImpl(param DownParam) (data []interface{}, isFinish bool, err error) {
 	nLen := len(d.Datas)
 	var end int
 	tp := param.(*TestParam)
 
 	if int(tp.Start) >= nLen {
+		isFinish = true
 		return
 	}
 	end = int(tp.Start + tp.Count)
@@ -52,7 +52,6 @@ func (d *TestDataCenter) SampleDownImpl(param DownParam) (data []interface{}, er
 	}
 	data = make([]interface{}, end-int(tp.Start))
 	copy(data, d.Datas[tp.Start:end])
-	time.Sleep(time.Second)
 	return
 }
 
@@ -65,9 +64,9 @@ func TestDownload(t *testing.T) {
 	}
 	var once int32
 	once = 13
-	tmStart := strfmt.DateTime(time.Now().Add(0 - time.Hour))
-	tmEnd := strfmt.DateTime(time.Now())
-	down := NewDataDownload(tmStart, tmEnd, NewTestParam, d.SampleDownImpl, int32(once), 5)
+	tmStart := time.Now().Add(0 - time.Hour)
+	tmEnd := time.Now()
+	down := NewDataDownload(tmStart, tmEnd, NewTestParam, d.SampleDownImpl, int32(once), time.Second, 5)
 	dataChan := down.Start()
 	nCount := 0
 	for d := range dataChan {

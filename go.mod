@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/SuperGod/trademodel v1.0.2
+	github.com/beefsack/go-rate v0.0.0-20180408011153-efa7637bb9b6
 	github.com/go-openapi/analysis v0.19.0 // indirect
 	github.com/go-openapi/errors v0.19.0
 	github.com/go-openapi/jsonpointer v0.19.0 // indirect
