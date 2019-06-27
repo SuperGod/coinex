@@ -35,6 +35,7 @@ type Bitmex struct {
 	APISecret string
 	proxy     string
 	enableWS  bool
+	baseURL   string
 	trans     *Transport
 }
 
@@ -59,6 +60,7 @@ func NewBitmexFromCfg(key, secret, baseURL string, cfg *apiclient.TransportConfi
 	if cfg == nil {
 		cfg = &apiclient.TransportConfig{}
 	}
+	b.baseURL = baseURL
 	cfg.Host = baseURL
 	cfg.BasePath = "/api/v1"
 	cfg.Schemes = []string{"https"}
@@ -69,6 +71,11 @@ func NewBitmexFromCfg(key, secret, baseURL string, cfg *apiclient.TransportConfi
 	b.APIKey = key
 	b.APISecret = secret
 	return b
+}
+func (b *Bitmex) Clone() (ret *Bitmex) {
+	ret = NewBitmexFromCfg(b.APIKey, b.APISecret, b.baseURL, nil)
+	ret.wsAPI = NewBitmexWS(b.symbol, b.APIKey, b.APISecret, b.proxy)
+	return
 }
 
 func (b *Bitmex) SetDebug(bDebug bool) {
@@ -107,6 +114,7 @@ func (b *Bitmex) SetDepthChan(depthChan chan Depth) {
 // example: socks5://127.0.0.1:1080
 //          http://127.0.0.1:1080
 func (b *Bitmex) SetProxy(proxy string) (err error) {
+	b.proxy = proxy
 	_, err = url.Parse(proxy)
 	if err != nil {
 		err = fmt.Errorf("set proxy %s error:%s", proxy, err.Error())
@@ -122,7 +130,7 @@ func (b *Bitmex) SetProxy(proxy string) (err error) {
 func (b *Bitmex) Contracts() (contracts []Contract, err error) {
 	ret, err := b.api.Instrument.InstrumentGetActiveAndIndices(&instrument.InstrumentGetActiveAndIndicesParams{})
 	if err != nil {
-		fmt.Println("error:", err.Error())
+		log.Error("get Contracts error:", err.Error())
 		return
 	}
 	for _, v := range ret.Payload {
@@ -165,7 +173,7 @@ func (b *Bitmex) ContractBalances() (balances map[Contract]Balance, err error) {
 	if err != nil {
 		return
 	}
-	fmt.Println(wallet)
+	log.Debug(wallet)
 	return
 }
 
@@ -425,7 +433,6 @@ func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []in
 	downFunc := func(param DownParam) (data []interface{}, isFinished bool, err1 error) {
 		p := param.(*downParam)
 		params := p.bitmexDownParam.(*trade.TradeGetBucketedParams)
-		fmt.Println("start:", *params.Start)
 		klineInfo, err1 := b.api.Trade.TradeGetBucketed(params)
 		if err1 != nil {
 			return

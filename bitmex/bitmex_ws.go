@@ -103,6 +103,7 @@ type BitmexWS struct {
 	subcribeTypes []SubscribeInfo
 	isRuning      bool
 	wsConnMutex   sync.Mutex
+	handles       map[string]func(tbl string, msg *Resp)
 }
 
 func NewBitmexWS(symbol, key, secret, proxy string) (bw *BitmexWS) {
@@ -122,6 +123,7 @@ func NewBitmexWSWithURL(symbol, key, secret, proxy, wsURL string) (bw *BitmexWS)
 	bw.key = key
 	bw.secret = secret
 	bw.proxy = proxy
+	bw.handles = make(map[string]func(tbl string, msg *Resp))
 	bw.orderBook = NewOrderBookMap()
 	bw.pos = NewPositionMap()
 	bw.shutdown = NewRoutineManagement()
@@ -141,6 +143,10 @@ func (bw *BitmexWS) writeJSON(data interface{}) (err error) {
 	err = bw.wsConn.WriteJSON(data)
 	bw.wsConnMutex.Unlock()
 	return
+}
+
+func (bw *BitmexWS) SetHandle(tbl string, handle func(tbl string, msg *Resp)) {
+	bw.handles[tbl] = handle
 }
 
 func (bw *BitmexWS) SetSymbol(symbol string) (err error) {
@@ -443,6 +449,10 @@ func (bw *BitmexWS) handleMessage() {
 				log.Debug("Bitmex websocket subscribed success")
 			}
 		} else if ret.HasTable() {
+			v, ok := bw.handles[ret.Table]
+			if ok {
+				v(ret.Table, &ret)
+			}
 			switch ret.Table {
 			case BitmexWSOrderbookL2:
 				err = bw.processOrderbook(&ret)

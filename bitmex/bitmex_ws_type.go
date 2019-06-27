@@ -287,6 +287,30 @@ func transTrade(v *models.Trade) (t Trade) {
 	return
 }
 
+func TransCandle(binSize string, v *models.TradeBin) (candle *Candle) {
+	var secDuration int64
+	switch binSize {
+	case "1m":
+		secDuration = 60
+	case "5m":
+		secDuration = 60 * 5
+	case "1h":
+		secDuration = 60 * 60
+	case "1d":
+		secDuration = 60 * 60 * 24
+	}
+	// v.Timestamp is the close time,not start time
+	candle = &Candle{Start: time.Time(*v.Timestamp).Unix() - secDuration,
+		Open:   v.Open,
+		High:   v.High,
+		Low:    v.Low,
+		Close:  v.Close,
+		Volume: float64(v.Volume),
+		VWP:    v.Vwap,
+		Trades: v.Trades}
+	return
+}
+
 func transCandle(klines []*models.TradeBin, candles *[]*Candle, binSize string) {
 	var secDuration int64
 	switch binSize {
