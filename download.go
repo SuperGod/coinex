@@ -21,19 +21,20 @@ type NewParamFunc func() DownParam
 type DownFunc func(DownParam) ([]interface{}, bool, error)
 
 type DataDownload struct {
-	nDuration time.Duration
-	dataCh    chan []interface{}
-	paramFunc NewParamFunc
-	downFunc  DownFunc
-	onceCount int32
-	startTime time.Time
-	endTime   time.Time
-	nFinish   int32 // 0 not finish, 1 finish
-	nTotal    int
-	limit     *rate.RateLimiter
+	nDuration   time.Duration
+	binDuration time.Duration
+	dataCh      chan []interface{}
+	paramFunc   NewParamFunc
+	downFunc    DownFunc
+	onceCount   int32
+	startTime   time.Time
+	endTime     time.Time
+	nFinish     int32 // 0 not finish, 1 finish
+	nTotal      int
+	limit       *rate.RateLimiter
 }
 
-func NewDataDownload(start, end time.Time, paramFunc NewParamFunc, downFunc DownFunc, onceCount int32, nDuration time.Duration, nLimit int) (d *DataDownload) {
+func NewDataDownload(start, end time.Time, binDuration time.Duration, paramFunc NewParamFunc, downFunc DownFunc, onceCount int32, nDuration time.Duration, nLimit int) (d *DataDownload) {
 	d = new(DataDownload)
 	d.paramFunc = paramFunc
 	d.dataCh = make(chan []interface{}, 1024)
@@ -41,6 +42,7 @@ func NewDataDownload(start, end time.Time, paramFunc NewParamFunc, downFunc Down
 	d.onceCount = onceCount
 	d.startTime = start
 	d.endTime = end
+	d.binDuration = binDuration
 	d.limit = rate.New(nLimit, nDuration)
 	return
 }
@@ -57,10 +59,11 @@ func (d *DataDownload) Run() {
 	}()
 
 	var nStart int32
+	start := d.startTime
 	for {
 		d.limit.Wait()
 		params := d.paramFunc()
-		params.SetStartTime(&d.startTime)
+		params.SetStartTime(&start)
 		params.SetEndTime(&d.endTime)
 		params.SetCount(&d.onceCount)
 		params.SetStart(&nStart)
@@ -72,10 +75,14 @@ func (d *DataDownload) Run() {
 			d.dataCh <- ret
 		}
 
-		nStart += int32(len(ret))
 		if isFinished {
 			d.SetFinish(1)
 			break
+		}
+		if d.binDuration == 0 {
+			nStart += int32(len(ret))
+		} else {
+			start = start.Add(d.binDuration * time.Duration(len(ret)))
 		}
 	}
 	return

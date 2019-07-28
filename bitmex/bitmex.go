@@ -74,7 +74,11 @@ func NewBitmexFromCfg(key, secret, baseURL string, cfg *apiclient.TransportConfi
 }
 func (b *Bitmex) Clone() (ret *Bitmex) {
 	ret = NewBitmexFromCfg(b.APIKey, b.APISecret, b.baseURL, nil)
-	ret.wsAPI = NewBitmexWS(b.symbol, b.APIKey, b.APISecret, b.proxy)
+	if b.baseURL == TestBaseURL {
+		ret.wsAPI = NewBitmexWSTest(b.symbol, b.APIKey, b.APISecret, b.proxy)
+	} else {
+		ret.wsAPI = NewBitmexWS(b.symbol, b.APIKey, b.APISecret, b.proxy)
+	}
 	return
 }
 
@@ -400,7 +404,7 @@ func (b *Bitmex) TradesChan(start, end time.Time) (trades chan []interface{}, er
 		return
 	}
 	duration, count := b.getSleepDuration()
-	d := NewDataDownload(start, end, paramFunc, downFunc, 500, duration, count)
+	d := NewDataDownload(start, end, 0, paramFunc, downFunc, 500, duration, count)
 	trades = d.Start()
 	return
 }
@@ -433,13 +437,17 @@ func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []in
 	downFunc := func(param DownParam) (data []interface{}, isFinished bool, err1 error) {
 		p := param.(*downParam)
 		params := p.bitmexDownParam.(*trade.TradeGetBucketedParams)
+		// paramBuf, _ := json.Marshal(params)
 		klineInfo, err1 := b.api.Trade.TradeGetBucketed(params)
 		if err1 != nil {
 			return
 		}
 		for _, v := range klineInfo.Payload {
-			data = append(data, transOneCandle(v))
+			data = append(data, transOneCandle(v, bSize))
 		}
+		// firstData, _ := json.Marshal(klineInfo.Payload[0])
+		// lastData, _ := json.Marshal(klineInfo.Payload[len(klineInfo.Payload)-1])
+		// fmt.Printf("param:%s len:%d first:%s data:%s\n", string(paramBuf), len(data), string(firstData), string(lastData))
 		if len(data) < 500 {
 			isFinished = true
 		}
@@ -450,21 +458,26 @@ func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []in
 		err = errors.New("time range error")
 		return
 	}
+	var binDuration = time.Minute
 	var nTotal int
 	switch strings.ToLower(bSize) {
 	case "1m":
+		binDuration = time.Minute
 		nTotal = int(duration / time.Minute)
 	case "5m":
+		binDuration = 5 * time.Minute
 		nTotal = int(duration / (5 * time.Minute))
 	case "1h":
+		binDuration = time.Hour
 		nTotal = int(duration / time.Hour)
 	case "1d":
+		binDuration = (time.Hour * 24)
 		nTotal = int(duration / (time.Hour * 24))
 	}
 	log.Debug("total:", nTotal)
 
 	duration, count := b.getSleepDuration()
-	d := NewDataDownload(start, end, paramFunc, downFunc, 500, duration, count)
+	d := NewDataDownload(start, end, binDuration, paramFunc, downFunc, 500, duration, count)
 	klines = d.Start()
 	return
 }

@@ -336,8 +336,19 @@ func transCandle(klines []*models.TradeBin, candles *[]*Candle, binSize string) 
 	}
 }
 
-func transOneCandle(v *models.TradeBin) (candle *Candle) {
-	candle = &Candle{Start: time.Time(*v.Timestamp).Unix(),
+func transOneCandle(v *models.TradeBin, binSize string) (candle *Candle) {
+	var secDuration int64
+	switch binSize {
+	case "1m":
+		secDuration = 60
+	case "5m":
+		secDuration = 60 * 5
+	case "1h":
+		secDuration = 60 * 60
+	case "1d":
+		secDuration = 60 * 60 * 24
+	}
+	candle = &Candle{Start: time.Time(*v.Timestamp).Unix() - secDuration,
 		Open:   v.Open,
 		High:   v.High,
 		Low:    v.Low,
