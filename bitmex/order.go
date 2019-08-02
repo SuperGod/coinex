@@ -1,6 +1,7 @@
 package bitmex
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -43,6 +44,9 @@ func transOrder(o *models.Order) (ret *Order) {
 }
 
 func (b *Bitmex) fixPrice(price float64) (ret float64, err error) {
+	if price == 0 {
+		return
+	}
 	err = b.preload()
 	if err != nil {
 		return
@@ -222,7 +226,12 @@ func (b *Bitmex) createStopOrder(stopPrice, price float64, amount int32, side, o
 	if err != nil {
 		return
 	}
+	stopPrice, err = b.fixPrice(stopPrice)
+	if err != nil {
+		return
+	}
 	execInst := "Close"
+
 	params := order.OrderNewParams{
 		StopPx:   &stopPrice,
 		Side:     &side,
@@ -232,11 +241,22 @@ func (b *Bitmex) createStopOrder(stopPrice, price float64, amount int32, side, o
 		OrdType:  &orderType,
 		ExecInst: &execInst,
 	}
+	if stopPrice != 0 {
+		params.StopPx = &stopPrice
+	} else {
+		execInst += ",LastPrice"
+	}
 	if price != 0 {
 		params.Price = &price
 	}
+	buf, _ := json.Marshal(params)
+	fmt.Println("param:", string(buf))
 	orderInfo, err := b.api.Order.OrderNew(&params, nil)
 	if err != nil {
+		badReqErr, ok := err.(*order.OrderNewBadRequest)
+		if ok && badReqErr != nil && badReqErr.Payload != nil && badReqErr.Payload.Error != nil {
+			err = fmt.Errorf("bad request %s %s", badReqErr.Payload.Error.Name, badReqErr.Payload.Error.Message)
+		}
 		return
 	}
 	newOrder = orderInfo.Payload
@@ -267,6 +287,10 @@ func (b *Bitmex) closeOrder(price float64, amount int32, side, orderType, commen
 	}
 	orderInfo, err := b.api.Order.OrderNew(&params, nil)
 	if err != nil {
+		badReqErr, ok := err.(*order.OrderNewBadRequest)
+		if ok && badReqErr != nil && badReqErr.Payload != nil && badReqErr.Payload.Error != nil {
+			err = fmt.Errorf("bad request %s %s", badReqErr.Payload.Error.Name, badReqErr.Payload.Error.Message)
+		}
 		return
 	}
 	newOrder = orderInfo.Payload
@@ -294,8 +318,8 @@ func (b *Bitmex) createOrder(price float64, amount int32, side, orderType, comme
 	}
 	orderInfo, err := b.api.Order.OrderNew(&params, nil)
 	if err != nil {
-		badReqErr := err.(*order.OrderNewBadRequest)
-		if badReqErr != nil && badReqErr.Payload != nil && badReqErr.Payload.Error != nil {
+		badReqErr, ok := err.(*order.OrderNewBadRequest)
+		if ok && badReqErr != nil && badReqErr.Payload != nil && badReqErr.Payload.Error != nil {
 			err = fmt.Errorf("bad request %s %s", badReqErr.Payload.Error.Name, badReqErr.Payload.Error.Message)
 		}
 		return
