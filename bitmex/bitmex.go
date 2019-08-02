@@ -37,6 +37,9 @@ type Bitmex struct {
 	enableWS  bool
 	baseURL   string
 	trans     *Transport
+	postOnly  bool
+	postOnlys []string
+	contacts  map[string]*models.Instrument
 }
 
 func NewBitmex(key, secret string) (b *Bitmex) {
@@ -82,8 +85,25 @@ func (b *Bitmex) Clone() (ret *Bitmex) {
 	return
 }
 
+func (b *Bitmex) preload() (err error) {
+	if len(b.contacts) > 0 {
+		return
+	}
+	_, err = b.Contracts()
+	return
+}
+
 func (b *Bitmex) SetDebug(bDebug bool) {
 	b.trans.SetDebug(bDebug)
+}
+
+func (b *Bitmex) SetPostOnly(postOnly bool) {
+	b.postOnly = postOnly
+	if b.postOnly {
+		b.postOnlys = []string{PostOnly}
+	} else {
+		b.postOnlys = []string{}
+	}
 }
 
 // SetMaxLocalDepth set max local depth cache len
@@ -137,15 +157,18 @@ func (b *Bitmex) Contracts() (contracts []Contract, err error) {
 		log.Error("get Contracts error:", err.Error())
 		return
 	}
+	temp := make(map[string]*models.Instrument)
 	for _, v := range ret.Payload {
 		if v.State != "Open" {
 			continue
 		}
+		temp[*v.Symbol] = v
 		contracts = append(contracts,
 			Contract{Symbol: v.RootSymbol,
 				Name:   *v.Symbol,
 				Expiry: time.Time(v.Expiry)})
 	}
+	b.contacts = temp
 	return
 }
 

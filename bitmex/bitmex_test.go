@@ -84,7 +84,6 @@ func TestUser(t *testing.T) {
 }
 
 func TestLongLimit(t *testing.T) {
-
 	api := GetClient()
 	high, low := GetHighLowPrice(t, api)
 	order1, err := api.OpenLong(low, 1)
@@ -98,6 +97,37 @@ func TestLongLimit(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	t.Log("CloseLong:", order2)
+}
+
+func TestLongLimitPostOnly(t *testing.T) {
+	api := GetClient()
+	high, low := GetHighLowPrice(t, api)
+	api.SetPostOnly(true)
+	order1, err := api.OpenLong(high, 1)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	od, err := api.Order(order1.OrderID)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if od.Status != "Canceled" {
+		t.Fatal("LongLimit with Postonly failed", od.Status)
+	}
+	t.Log("OpenLong:", od.Status)
+
+	order2, err := api.CloseLong(low, 1)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	od, err = api.Order(order2.OrderID)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if od.Status != "Canceled" {
+		t.Fatal("LongLimit with Postonly failed", od.Status)
+	}
+	t.Log("CloseLong: status", od.Status)
 }
 
 func TestLongMarket(t *testing.T) {
