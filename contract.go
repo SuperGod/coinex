@@ -62,5 +62,5 @@ type FuturesExchanger interface {
 
 	KlineRecent(count int32, binSize string) (klines []*Candle, err error)
 	Kline(start, end time.Time, nLimit int, binSize string) (klines []*Candle, err error)
-	KlineChan(start, end time.Time, bSize string) (klines chan []interface{}, err error)
+	KlineChan(start, end time.Time, bSize string) (data chan []interface{}, err chan error)
 }

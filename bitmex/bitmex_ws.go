@@ -27,8 +27,9 @@ const (
 	testBitmexWSURL = "wss://testnet.bitmex.com/realtime"
 
 	// Bitmex websocket op
-	BitmexWSOrderbookL2  = "orderBookL2" // Full level 2 orderBook
-	BitmexWSOrderbookL10 = "orderBook10" // Top 10 levels using traditional full book push
+	BitmexWSOrderbookL2    = "orderBookL2"    // Full level 2 orderBook
+	BitmexWSOrderbookL2_25 = "orderBookL2_25" // Full level 2 orderBook
+	BitmexWSOrderbookL10   = "orderBook10"    // Top 10 levels using traditional full book push
 
 	BitmexWSTrade      = "trade"      // Live trades
 	BitmexWSTradeBin1m = "tradeBin1m" // 1-minute trade bins
@@ -128,7 +129,7 @@ func NewBitmexWSWithURL(symbol, key, secret, proxy, wsURL string) (bw *BitmexWS)
 	bw.pos = NewPositionMap()
 	bw.shutdown = NewRoutineManagement()
 	bw.timer = time.NewTimer(WSTimeOut)
-	bw.subcribeTypes = []SubscribeInfo{SubscribeInfo{Op: BitmexWSOrderbookL2, Param: bw.symbol},
+	bw.subcribeTypes = []SubscribeInfo{SubscribeInfo{Op: BitmexWSOrderbookL2_25, Param: bw.symbol},
 		SubscribeInfo{Op: BitmexWSTrade, Param: bw.symbol},
 		SubscribeInfo{Op: BitmexWSPosition, Param: bw.symbol}}
 	bw.klineChan = make(map[string]chan *Candle)
@@ -422,10 +423,11 @@ func (bw *BitmexWS) handleMessage() {
 			if err != nil {
 				log.Error("Bitmex websocket error close error:", err.Error())
 			}
-			bw.reconnect()
+			// bw.reconnect()
 			return
 		}
 		msg = string(data)
+		log.Debug("ws:", msg)
 		if strings.Contains(msg, "ping") {
 			err = bw.writeJSON("pong")
 			if err != nil {
@@ -446,7 +448,7 @@ func (bw *BitmexWS) handleMessage() {
 			if !ret.Success {
 				log.Error("Bitmex websocket error:", msg)
 			} else {
-				log.Debug("Bitmex websocket subscribed success")
+				log.Debug("Bitmex websocket read success")
 			}
 		} else if ret.HasTable() {
 			v, ok := bw.handles[ret.Table]
@@ -454,14 +456,14 @@ func (bw *BitmexWS) handleMessage() {
 				v(ret.Table, &ret)
 			}
 			switch ret.Table {
-			case BitmexWSOrderbookL2:
+			case BitmexWSOrderbookL2, BitmexWSOrderbookL2_25:
 				err = bw.processOrderbook(&ret)
 			case BitmexWSTrade:
 				err = bw.processTrade(&ret)
 			case BitmexWSAnnouncement:
 				// err = bw.processTrade(&ret)
 			case BitmexWSPosition:
-				// log.Debug("processPosition", msg)
+				// log.Info("processPosition", msg)
 				err = bw.processPosition(&ret)
 			case BitmexWSTradeBin1m:
 				err = bw.processTradeBin("1m", &ret)

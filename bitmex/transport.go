@@ -56,7 +56,7 @@ func (t *Transport) Submit(operation *runtime.ClientOperation) (interface{}, err
 	}
 	var fn runtime.ClientAuthInfoWriterFunc
 	fn = func(req runtime.ClientRequest, formats strfmt.Registry) error {
-		req.SetTimeout(5 * time.Second)
+		req.SetTimeout(10 * time.Second)
 		if t.Key != "" {
 			expires, sign := t.signature(req, operation, formats)
 			req.SetHeaderParam("api-key", t.Key)

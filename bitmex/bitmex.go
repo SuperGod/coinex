@@ -11,7 +11,9 @@ import (
 	. "github.com/SuperGod/trademodel"
 
 	apiclient "github.com/SuperGod/coinex/bitmex/client"
+	"github.com/SuperGod/coinex/bitmex/client/funding"
 	"github.com/SuperGod/coinex/bitmex/client/instrument"
+	"github.com/SuperGod/coinex/bitmex/client/insurance"
 	"github.com/SuperGod/coinex/bitmex/client/order_book"
 	"github.com/SuperGod/coinex/bitmex/client/position"
 	"github.com/SuperGod/coinex/bitmex/client/trade"
@@ -405,7 +407,8 @@ func (b *Bitmex) Trades(start, end time.Time) (trades []Trade, err error) {
 	return
 }
 
-func (b *Bitmex) TradesChan(start, end time.Time) (trades chan []interface{}, err error) {
+func (b *Bitmex) TradesChan(start, end time.Time) (trades chan []interface{}, err chan error) {
+	err = make(chan error, 1)
 	paramFunc := func() DownParam {
 		p := &downParam{bitmexDownParam: trade.NewTradeGetParams()}
 		return p
@@ -428,7 +431,8 @@ func (b *Bitmex) TradesChan(start, end time.Time) (trades chan []interface{}, er
 	}
 	duration, count := b.getSleepDuration()
 	d := NewDataDownload(start, end, 0, paramFunc, downFunc, 500, duration, count)
-	trades = d.Start()
+	trades = d.Start(err)
+
 	return
 }
 
@@ -452,7 +456,8 @@ func (d *downParam) SetEndTime(endTime *time.Time) {
 	d.bitmexDownParam.SetEndTime(&tEnd)
 }
 
-func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []interface{}, err error) {
+func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []interface{}, err chan error) {
+	err = make(chan error, 1)
 	paramFunc := func() DownParam {
 		params := &downParam{bitmexDownParam: &trade.TradeGetBucketedParams{BinSize: &bSize, Symbol: &b.symbol}}
 		return params
@@ -478,7 +483,7 @@ func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []in
 	}
 	duration := end.Sub(start)
 	if duration < 0 {
-		err = errors.New("time range error")
+		err <- errors.New("time range error")
 		return
 	}
 	var binDuration = time.Minute
@@ -501,7 +506,7 @@ func (b *Bitmex) KlineChan(start, end time.Time, bSize string) (klines chan []in
 
 	duration, count := b.getSleepDuration()
 	d := NewDataDownload(start, end, binDuration, paramFunc, downFunc, 500, duration, count)
-	klines = d.Start()
+	klines = d.Start(err)
 	return
 }
 
@@ -511,5 +516,39 @@ func (b *Bitmex) getSleepDuration() (duration time.Duration, count int) {
 	if b.APISecret != "" {
 		count = 60
 	}
+	return
+}
+
+// GetInsurance get insurance
+func (b *Bitmex) GetInsurance(start, end time.Time) (ins []*models.Insurance, err error) {
+	startTime := strfmt.DateTime(start)
+	endTime := strfmt.DateTime(end)
+	// filter := `{}`
+	params := insurance.NewInsuranceGetParamsWithTimeout(time.Minute)
+	params.SetStartTime(&startTime)
+	params.SetEndTime(&endTime)
+	params.SetSymbol(&b.symbol)
+	data, err := b.api.Insurance.InsuranceGet(params)
+	if err != nil {
+		return
+	}
+	ins = data.Payload
+	return
+}
+
+// GetFunding get insurance
+func (b *Bitmex) GetFunding(start, end time.Time) (funds []*models.Funding, err error) {
+	startTime := strfmt.DateTime(start)
+	endTime := strfmt.DateTime(end)
+	// filter := `{}`
+	params := funding.NewFundingGetParamsWithTimeout(time.Minute)
+	params.SetStartTime(&startTime)
+	params.SetEndTime(&endTime)
+	params.SetSymbol(&b.symbol)
+	data, err := b.api.Funding.FundingGet(params)
+	if err != nil {
+		return
+	}
+	funds = data.Payload
 	return
 }

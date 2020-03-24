@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"os/user"
+
+	"github.com/spf13/viper"
 )
 
 type ConfigItem struct {
@@ -34,6 +36,11 @@ func LoadConfigFile(cfg string) (configs Config, err error) {
 	defer f.Close()
 	dec := json.NewDecoder(f)
 	err = dec.Decode(&configs)
+	return
+}
+
+func LoadViperConfig(cfg *viper.Viper) (configs Config, err error) {
+	err = cfg.Unmarshal(&configs)
 	return
 }
 

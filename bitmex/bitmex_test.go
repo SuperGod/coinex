@@ -3,6 +3,7 @@ package bitmex
 import (
 	"log"
 	"testing"
+	"time"
 
 	. "github.com/SuperGod/trademodel"
 )
@@ -86,11 +87,12 @@ func TestUser(t *testing.T) {
 func TestLongLimit(t *testing.T) {
 	api := GetClient()
 	high, low := GetHighLowPrice(t, api)
-	order1, err := api.OpenLong(low, 1)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	t.Log("OpenLong:", order1)
+	_ = low
+	// order1, err := api.OpenLong(low, 1)
+	// if err != nil {
+	// 	t.Fatal(err.Error())
+	// }
+	// t.Log("OpenLong:", order1)
 
 	order2, err := api.CloseLong(high, 1)
 	if err != nil {
@@ -243,4 +245,29 @@ func TestKlineRecent(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	t.Log("klines", klines)
+}
+
+func TestGetInsurance(t *testing.T) {
+	api := GetClient()
+	api.SetDebug(true)
+	tStart := time.Now().Add(0 - time.Hour*48)
+	ins, err := api.GetInsurance(tStart, time.Now())
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	t.Log("ins", ins)
+}
+
+func TestGetFunding(t *testing.T) {
+	api := GetClient()
+	api.SetDebug(true)
+	tStart := time.Now().Add(0 - time.Hour*48)
+	tEnd := time.Now().Add(time.Hour * 24)
+	funds, err := api.GetFunding(tStart, tEnd)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	for _, v := range funds {
+		t.Log("ins", *v.Symbol, v.Timestamp, v.FundingRate)
+	}
 }

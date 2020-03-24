@@ -2,7 +2,26 @@ package bitmex
 
 import (
 	. "github.com/SuperGod/coinex"
+	"github.com/spf13/viper"
 )
+
+func GetClientByViperName(cfg *viper.Viper, name string, bTest bool) (bm *Bitmex) {
+	configs, err := LoadViperConfig(cfg)
+	if err != nil {
+		panic(err.Error())
+	}
+	key, secret := configs.Get(name)
+	if bTest {
+		bm = NewBitmexTest(key, secret)
+		bm.SetDebug(true)
+	} else {
+		bm = NewBitmex(key, secret)
+	}
+	if configs.Proxy != "" {
+		bm.SetProxy(configs.Proxy)
+	}
+	return
+}
 
 func GetClientByName(name string, bTest bool) (bm *Bitmex) {
 	configs, err := LoadConfigs()
@@ -19,6 +38,7 @@ func GetClientByName(name string, bTest bool) (bm *Bitmex) {
 	if configs.Proxy != "" {
 		bm.SetProxy(configs.Proxy)
 	}
+	// bm.SetDebug(true)
 	return bm
 }
 

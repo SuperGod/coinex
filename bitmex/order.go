@@ -409,5 +409,5 @@ func IsOrderCanceled(o *Order) bool {
 }
 
 func IsOrderLong(o *Order) bool {
-	return o.Side == "buy"
+	return strings.ToLower(o.Side) == "buy"
 }

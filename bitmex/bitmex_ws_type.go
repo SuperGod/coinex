@@ -147,7 +147,7 @@ func (r *Resp) Decode(buf []byte) (err error) {
 		r.hasTable = true
 		raw := ret.Get("data").Raw
 		switch r.Table {
-		case BitmexWSOrderbookL2:
+		case BitmexWSOrderbookL2, BitmexWSOrderbookL2_25:
 			var orderbooks OrderBookData
 			err = json.Unmarshal([]byte(raw), &orderbooks)
 			if err != nil {
@@ -206,7 +206,7 @@ func (r *Resp) GetTradeData() (trades []*models.Trade) {
 }
 
 func (r *Resp) GetOrderbookL2() (orderbook OrderBookData) {
-	if r.Table != BitmexWSOrderbookL2 || r.data == nil {
+	if (r.Table != BitmexWSOrderbookL2 && r.Table != BitmexWSOrderbookL2_25) || r.data == nil {
 		return
 	}
 	orderbook, _ = r.data.(OrderBookData)
