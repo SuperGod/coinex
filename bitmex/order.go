@@ -22,6 +22,7 @@ const (
 	OrderTypeStop      = "Stop"      // stop lose with market price, must set stopPx
 	OrderTypeStopLimit = "StopLimit" // stop lose with limit price, must set stopPx
 	PostOnly           = "ParticipateDoNotInitiate"
+	ReduceOnly         = "ReduceOnly"
 )
 
 var (
@@ -82,6 +83,7 @@ func (b *Bitmex) OpenLong(price float64, amount float64) (ret *Order, err error)
 	if err != nil {
 		return
 	}
+	fmt.Printf("%##v\n", *newOrder)
 	ret = transOrder(newOrder)
 	return
 }
@@ -297,14 +299,15 @@ func (b *Bitmex) closeOrder(price float64, amount int32, side, orderType, commen
 	return
 }
 
-func (b *Bitmex) createOrder(price float64, amount int32, side, orderType, comment string, execInsts ...string) (newOrder *models.Order, err error) {
+// CreteOrder create bitmex order,return bitmex model information
+func (b *Bitmex) CreateOrder(price float64, amount int32, symbol, side, orderType, comment string, execInsts ...string) (newOrder *models.Order, err error) {
 	price, err = b.fixPrice(price)
 	if err != nil {
 		return
 	}
 	params := order.OrderNewParams{
 		Side:     &side,
-		Symbol:   b.symbol,
+		Symbol:   symbol,
 		Text:     &comment,
 		OrderQty: &amount,
 		OrdType:  &orderType,
@@ -325,6 +328,11 @@ func (b *Bitmex) createOrder(price float64, amount int32, side, orderType, comme
 		return
 	}
 	newOrder = orderInfo.Payload
+	return
+}
+
+func (b *Bitmex) createOrder(price float64, amount int32, side, orderType, comment string, execInsts ...string) (newOrder *models.Order, err error) {
+	newOrder, err = b.CreateOrder(price, amount, b.symbol, side, orderType, comment, execInsts...)
 	return
 }
 

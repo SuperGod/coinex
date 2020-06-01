@@ -299,21 +299,17 @@ func (bw *BitmexWS) Connect() (err error) {
 	log.Debug("welcome:", string(p))
 	go bw.connectionHandler()
 	go bw.handleMessage()
-	err = bw.sendAuth()
-	if err != nil {
-		return err
-	}
-	err = bw.subscribe()
-	if err != nil {
-		return err
-	}
-
 	if bw.key != "" {
 		err = bw.sendAuth()
 		if err != nil {
 			return
 		}
 	}
+	err = bw.subscribe()
+	if err != nil {
+		return err
+	}
+
 	bw.isRuning = true
 	return
 }
