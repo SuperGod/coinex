@@ -21,7 +21,7 @@ require (
 	github.com/lunny/log v0.0.0-20160921050905-7887c61bf0de
 	github.com/mailru/easyjson v0.0.0-20190403194419-1ea4449da983 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
-	github.com/okcoin-okex/open-api-v3-sdk v0.0.0-20190507094206-e7f179c24e93
+	github.com/okex/V3-Open-API-SDK v0.0.0-20200422155602-a032bd242153
 	github.com/sirupsen/logrus v1.4.1
 	github.com/spf13/viper v1.6.2
 	github.com/tidwall/gjson v1.2.1

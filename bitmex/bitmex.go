@@ -306,8 +306,12 @@ func (b *Bitmex) GetTicker() (ticker Ticker, err error) {
 	ticker.Last = v.Price
 	ticker.Volume = v.HomeNotional
 	ticker.CurrencyPair = b.symbol
-	ticker.Ask = depth.Sells[0].Price
-	ticker.Bid = depth.Buys[0].Price
+	if len(depth.Sells) > 0 {
+		ticker.Ask = depth.Sells[0].Price
+	}
+	if len(depth.Buys) > 0 {
+		ticker.Bid = depth.Buys[0].Price
+	}
 	return
 }
 
