@@ -189,6 +189,20 @@ func (r *Resp) Decode(buf []byte) (err error) {
 				return
 			}
 			r.data = orders
+		case BitmexWSWallet:
+			var wallets []*models.Wallet
+			err = json.Unmarshal([]byte(raw), &wallets)
+			if err != nil {
+				return
+			}
+			r.data = wallets
+		case BitmexWSMargin:
+			var margins []*models.Margin
+			err = json.Unmarshal([]byte(raw), &margins)
+			if err != nil {
+				return
+			}
+			r.data = margins
 		default:
 			log.Debug("unsupport table:", r.Table)
 		}
@@ -218,6 +232,22 @@ func (r *Resp) GetPostions() (positions []*models.Position) {
 		return
 	}
 	positions, _ = r.data.([]*models.Position)
+	return
+}
+
+func (r *Resp) GetWallets() (wallets []*models.Wallet) {
+	if r.Table != BitmexWSWallet || r.data == nil {
+		return
+	}
+	wallets, _ = r.data.([]*models.Wallet)
+	return
+}
+
+func (r *Resp) GetMargins() (margins []*models.Margin) {
+	if r.Table != BitmexWSMargin || r.data == nil {
+		return
+	}
+	margins, _ = r.data.([]*models.Margin)
 	return
 }
 
@@ -284,6 +314,16 @@ func transTrade(v *models.Trade) (t Trade) {
 		Amount: float64(v.Size), Side: v.Side,
 		Remark: v.TickDirection,
 		Time:   time.Time(*v.Timestamp)}
+	return
+}
+
+func transBalance(v *models.Margin) (b Balance) {
+	b = Balance{
+		Currency:  *v.Currency,
+		Available: float64(v.AvailableMargin),
+		Frozen:    0,
+		Balance:   float64(v.MarginBalance),
+	}
 	return
 }
 

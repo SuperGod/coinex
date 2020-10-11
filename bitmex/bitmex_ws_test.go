@@ -102,3 +102,20 @@ func TestWSKline(t *testing.T) {
 		log.Println(candle)
 	}
 }
+
+func TestWSBalance(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	clt := GetWSClient()
+	subs := []SubscribeInfo{SubscribeInfo{Op: BitmexWSMargin}}
+	clt.SetSubscribe(subs)
+	err := clt.Connect()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	bChan := make(chan Balance, 1024)
+	clt.SetBalanceChan(bChan)
+	for b := range bChan {
+		log.Println("balance changed")
+		log.Println(b)
+	}
+}

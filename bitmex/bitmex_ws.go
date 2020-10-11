@@ -51,6 +51,7 @@ const (
 	BitmexWSOrder     = "order"     // Live updates on your orders
 	BitmexWSMargin    = "margin"    // Updates on your current account balance and margin requirements
 	BitmexWSPosition  = "position"  // Updates on your positions
+	BitmexWSWallet    = "wallet"    // wallet update
 
 	bitmexActionInitialData = "partial"
 	bitmexActionInsertData  = "insert"
@@ -79,6 +80,8 @@ type BitmexWS struct {
 	trades                 []*models.Trade
 	pos                    PositionMap
 	orders                 OrderMap
+	wallets                []*models.Wallet
+	margins                []*models.Margin
 
 	shutdown *Shutdown
 
@@ -99,6 +102,7 @@ type BitmexWS struct {
 	klineChan    map[string]chan *Candle
 	positionChan chan []Position
 	orderChan    chan []Order
+	balanceChan  chan Balance
 	timer        *time.Timer
 
 	subcribeTypes []SubscribeInfo
@@ -129,9 +133,12 @@ func NewBitmexWSWithURL(symbol, key, secret, proxy, wsURL string) (bw *BitmexWS)
 	bw.pos = NewPositionMap()
 	bw.shutdown = NewRoutineManagement()
 	bw.timer = time.NewTimer(WSTimeOut)
-	bw.subcribeTypes = []SubscribeInfo{SubscribeInfo{Op: BitmexWSOrderbookL2_25, Param: bw.symbol},
-		SubscribeInfo{Op: BitmexWSTrade, Param: bw.symbol},
-		SubscribeInfo{Op: BitmexWSPosition, Param: bw.symbol}}
+	bw.subcribeTypes = []SubscribeInfo{
+		{Op: BitmexWSOrderbookL2_25, Param: bw.symbol},
+		{Op: BitmexWSTrade, Param: bw.symbol},
+		{Op: BitmexWSPosition, Param: bw.symbol},
+		{Op: BitmexWSMargin},
+	}
 	bw.klineChan = make(map[string]chan *Candle)
 	return
 }
@@ -173,6 +180,11 @@ func (bw *BitmexWS) SetOrderChan(orderChan chan []Order) (err error) {
 	return
 }
 
+func (bw *BitmexWS) SetBalanceChan(b chan Balance) (err error) {
+	bw.balanceChan = b
+	return
+}
+
 func (bw *BitmexWS) SetSubscribe(subcribeTypes []SubscribeInfo) {
 	bw.subcribeTypes = subcribeTypes
 	return
@@ -184,8 +196,14 @@ func (bw *BitmexWS) AddSubscribe(subcribeInfo SubscribeInfo) (err error) {
 	if bw.isRuning {
 		var subscriber WSCmd
 		subscriber.Command = "subscribe"
-		subscriber.Args = []interface{}{
-			subcribeInfo.Op + ":" + subcribeInfo.Param,
+		if subcribeInfo.Param != "" {
+			subscriber.Args = []interface{}{
+				subcribeInfo.Op + ":" + subcribeInfo.Param,
+			}
+		} else {
+			subscriber.Args = []interface{}{
+				subcribeInfo.Op,
+			}
 		}
 		err = bw.writeJSON(subscriber)
 	}
@@ -384,6 +402,7 @@ func (bw *BitmexWS) subscribe() (err error) {
 	// Announcement subscribe
 	// subscriber.Args = append(subscriber.Args, bitmexWSAnnouncement)
 	var nCount int
+	var str string
 	for _, v := range bw.subcribeTypes {
 		nCount++
 		if nCount > 20 {
@@ -394,8 +413,12 @@ func (bw *BitmexWS) subscribe() (err error) {
 			subscriber.Args = []interface{}{}
 			nCount = 1
 		}
-		subscriber.Args = append(subscriber.Args,
-			v.Op+":"+v.Param)
+		if v.Param != "" {
+			str = v.Op + ":" + v.Param
+		} else {
+			str = v.Op
+		}
+		subscriber.Args = append(subscriber.Args, str)
 	}
 	if len(subscriber.Args) > 0 {
 		err = bw.writeJSON(subscriber)
@@ -471,6 +494,8 @@ func (bw *BitmexWS) handleMessage() {
 				err = bw.processTradeBin("1d", &ret)
 			case BitmexWSOrder:
 				err = bw.processOrder(&ret)
+			case BitmexWSMargin:
+				err = bw.processMargin(&ret)
 			default:
 				log.Println(ret.Table, msg)
 			}
@@ -626,5 +651,26 @@ func (bw *BitmexWS) processOrder(msg *Resp) (err error) {
 	}
 	bw.orders.Update(datas)
 	bw.SetLastOrders(bw.orders.Orders())
+	return
+}
+
+func (bw *BitmexWS) processMargin(msg *Resp) (err error) {
+	datas := msg.GetMargins()
+	switch msg.Action {
+	case bitmexActionInitialData:
+		bw.margins = datas
+	case bitmexActionUpdateData:
+		bw.margins = datas
+	case bitmexActionInsertData:
+		bw.margins = datas
+	// case bitmexActionDeleteData:
+	default:
+		err = fmt.Errorf("unsupport walet action:%s", msg.Action)
+	}
+	if bw.balanceChan != nil {
+		for _, v := range datas {
+			bw.balanceChan <- transBalance(v)
+		}
+	}
 	return
 }
